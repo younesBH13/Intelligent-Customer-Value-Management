@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cvm_user
+      POSTGRES_PASSWORD: cvm_password
+      POSTGRES_DB: cvm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cvm_user -d cvm_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    environment:
+      CVM_DATABASE_URL: postgresql+psycopg2://cvm_user:cvm_password@postgres:5432/cvm_db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build: .
+    command: streamlit run app/dashboard.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    environment:
+      CVM_DATABASE_URL: postgresql+psycopg2://cvm_user:cvm_password@postgres:5432/cvm_db
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./artifacts:/app/artifacts
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+
